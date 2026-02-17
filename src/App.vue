@@ -8,10 +8,11 @@
       @start-test="startTest"
       @stop-test="stopTest"
     />
-    <MetricsGrid
+    <RetroSpeedTest
       v-if="isRunning || summary"
       :results="results"
       :is-running="isRunning"
+      :summary="summary"
     />
     <QualityScores v-if="scores" :scores="scores" />
     <SummaryDetails v-if="summary" :summary="summary" />
@@ -25,7 +26,7 @@ import SpeedTest from '@cloudflare/speedtest'
 import AppHeader from './components/AppHeader.vue'
 import AppFooter from './components/AppFooter.vue'
 import SpeedTestControls from './components/SpeedTestControls.vue'
-import MetricsGrid from './components/MetricsGrid.vue'
+import RetroSpeedTest from './components/RetroSpeedTest.vue'
 import QualityScores from './components/QualityScores.vue'
 import SummaryDetails from './components/SummaryDetails.vue'
 
@@ -35,7 +36,7 @@ export default {
     AppHeader,
     AppFooter,
     SpeedTestControls,
-    MetricsGrid,
+    RetroSpeedTest,
     QualityScores,
     SummaryDetails
   },
@@ -118,21 +119,31 @@ export default {
       }
 
       speedTest.value.onResultsChange = ({ type }) => {
-        console.log('Results updated, type:', type)
         if (!speedTest.value.results) return
 
-        // Update results in real-time
+        // Update results in real-time using the Results object methods
         const res = speedTest.value.results
 
-        if (res.download) results.value.download = res.download
-        if (res.upload) results.value.upload = res.upload
-        if (res.latency) results.value.latency = res.latency
-        if (res.jitter) results.value.jitter = res.jitter
-        if (res.downloadLatency) results.value.downloadLatency = res.downloadLatency
-        if (res.downloadJitter) results.value.downloadJitter = res.downloadJitter
-        if (res.uploadLatency) results.value.uploadLatency = res.uploadLatency
-        if (res.uploadJitter) results.value.uploadJitter = res.uploadJitter
-        if (res.packetLoss !== undefined) results.value.packetLoss = res.packetLoss
+        // Get bandwidth values (returns bps or null)
+        const download = res.getDownloadBandwidth()
+        const upload = res.getUploadBandwidth()
+        const latency = res.getUnloadedLatency()
+        const jitter = res.getUnloadedJitter()
+        const downloadLatency = res.getDownLoadedLatency()
+        const downloadJitter = res.getDownLoadedJitter()
+        const uploadLatency = res.getUpLoadedLatency()
+        const uploadJitter = res.getUpLoadedJitter()
+        const packetLoss = res.getPacketLoss()
+
+        if (download !== null && download !== undefined) results.value.download = download
+        if (upload !== null && upload !== undefined) results.value.upload = upload
+        if (latency !== null && latency !== undefined) results.value.latency = latency
+        if (jitter !== null && jitter !== undefined) results.value.jitter = jitter
+        if (downloadLatency !== null && downloadLatency !== undefined) results.value.downloadLatency = downloadLatency
+        if (downloadJitter !== null && downloadJitter !== undefined) results.value.downloadJitter = downloadJitter
+        if (uploadLatency !== null && uploadLatency !== undefined) results.value.uploadLatency = uploadLatency
+        if (uploadJitter !== null && uploadJitter !== undefined) results.value.uploadJitter = uploadJitter
+        if (packetLoss !== null && packetLoss !== undefined) results.value.packetLoss = packetLoss
       }
 
       speedTest.value.onFinish = (testResults) => {
