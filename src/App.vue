@@ -13,10 +13,16 @@
       :results="results"
       :is-running="isRunning"
       :summary="summary"
+      :style="{ opacity: showOverlay ? 0.3 : 1 }"
     />
     <QualityScores v-if="scores" :scores="scores" />
     <SummaryDetails v-if="summary" :summary="summary" />
     <AppFooter />
+
+    <UltimateQuestionOverlay
+      :is-visible="showOverlay"
+      @correct-answer="handleCorrectAnswer"
+    />
   </div>
 </template>
 
@@ -29,6 +35,7 @@ import SpeedTestControls from './components/SpeedTestControls.vue'
 import RetroSpeedTest from './components/RetroSpeedTest.vue'
 import QualityScores from './components/QualityScores.vue'
 import SummaryDetails from './components/SummaryDetails.vue'
+import UltimateQuestionOverlay from './components/UltimateQuestionOverlay.vue'
 
 export default {
   name: 'App',
@@ -38,11 +45,13 @@ export default {
     SpeedTestControls,
     RetroSpeedTest,
     QualityScores,
-    SummaryDetails
+    SummaryDetails,
+    UltimateQuestionOverlay
   },
   setup() {
     const speedTest = ref(null)
     const isRunning = ref(false)
+    const showOverlay = ref(false)
     const results = ref({
       download: null,
       upload: null,
@@ -116,6 +125,13 @@ export default {
       speedTest.value.onRunningChange = (running) => {
         console.log('Running state changed:', running)
         isRunning.value = running
+
+        // Show overlay when test starts running
+        if (running) {
+          setTimeout(() => {
+            showOverlay.value = true
+          }, 500) // Small delay to let the test UI appear first
+        }
       }
 
       speedTest.value.onResultsChange = ({ type }) => {
@@ -186,17 +202,26 @@ export default {
         speedTest.value.pause()
         isRunning.value = false
       }
+      // Hide overlay if stopping
+      showOverlay.value = false
+    }
+
+    const handleCorrectAnswer = () => {
+      console.log('Correct answer! Hiding overlay...')
+      showOverlay.value = false
     }
 
     return {
       isRunning,
+      showOverlay,
       results,
       scores,
       summary,
       statusText,
       statusClass,
       startTest,
-      stopTest
+      stopTest,
+      handleCorrectAnswer
     }
   }
 }
