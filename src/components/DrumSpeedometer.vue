@@ -43,7 +43,12 @@ export default {
   },
   computed: {
     displayValue() {
-      return Math.round(this.value)
+      const rounded = Math.round(this.value)
+      console.log(`DrumSpeedometer[${this.label}] displayValue:`, {
+        input_value: this.value,
+        rounded: rounded
+      })
+      return rounded
     },
     drumDigits() {
       // Create a continuous drum of digits from 0-999
@@ -59,9 +64,17 @@ export default {
     drumPosition() {
       // Each digit is 60px high, position so current value is centered
       const digitHeight = 60
-      const baseOffset = 10 * digitHeight // Start offset (10 digits above 0)
-      const valueOffset = this.displayValue * digitHeight
-      return baseOffset - valueOffset
+      const windowCenter = 40 // Center of 80px window (where indicator line is)
+
+      // Array starts at i=-10, so displayValue V is at array index (V + 10)
+      const arrayIndex = this.displayValue + 10
+
+      // That digit's top is at: arrayIndex * digitHeight
+      // Its center is at: top + (digitHeight / 2)
+      const digitCenter = (arrayIndex * digitHeight) + (digitHeight / 2)
+
+      // Move drum so digit center aligns with window center
+      return windowCenter - digitCenter
     }
   }
 }

@@ -1,0 +1,441 @@
+@startuml Cloudflare SpeedTest SDK Integration
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+title Cloudflare SpeedTest SDK - API Usage Sequence\nVue.js Application Integration Pattern
+
+actor User
+participant "SpeedTestControls" as Controls <<Vue Component>>
+participant "App.vue" as App <<Root Component>>
+participant "Vue Reactivity" as Vue <<System>>
+participant "SpeedTest SDK" as SDK <<@cloudflare/speedtest>>
+participant "Cloudflare Edge" as Edge <<Network>>
+collections "UI Components" as UI <<Speedometers, Scores>>
+
+== Initialization ==
+
+User -> Controls: Click "Start Test"
+activate Controls
+Controls -> App: emit('start-test')
+deactivate Controls
+activate App
+
+App -> App: Reset previous results
+note right
+  results.value = {
+    download: null,
+    upload: null,
+    latency: null,
+    ...
+  }
+  scores.value = null
+  summary.value = null
+end note
+
+App -> SDK: new SpeedTest(config)
+note right
+  markRaw(new SpeedTest({
+    autoStart: false,
+    measurements: [...]
+  }))
+
+  ⚠️ markRaw() prevents
+  Vue reactivity issues
+  with private fields
+end note
+activate SDK
+SDK --> App: speedTest instance
+deactivate SDK
+
+== Event Handler Registration ==
+
+App -> SDK: speedTest.onRunningChange = callback
+note right
+  (running) => {
+    isRunning.value = running
+    if (running) {
+      setTimeout(() => {
+        showOverlay.value = true
+      }, 500)
+    }
+  }
+end note
+
+App -> SDK: speedTest.onResultsChange = callback
+note right
+  ({ type }) => {
+    const res = speedTest.results
+    const download = res.getDownloadBandwidth()
+    if (download !== null) {
+      results.value.download = download
+    }
+    // ... update all metrics
+  }
+end note
+
+App -> SDK: speedTest.onFinish = callback
+note right
+  (testResults) => {
+    summary.value = testResults.getSummary()
+    scores.value = testResults.getScores()
+  }
+end note
+
+== Test Execution ==
+
+App -> SDK: speedTest.play()
+activate SDK
+
+SDK -> App: onRunningChange(true)
+activate App
+App -> Vue: isRunning.value = true
+activate Vue
+Vue -> UI: Re-render components
+activate UI
+UI --> User: Show "Testing..." state\nEnable Stop button
+deactivate UI
+deactivate Vue
+
+App -> App: setTimeout(2000ms)
+note right
+  ✅ FIXED: Delay increased from 500ms to 2000ms
+  Downloads start at ~1s
+  Overlay appears at 2s
+  User sees drum speedometer rolling first
+end note
+App -> Vue: showOverlay.value = true
+Vue -> UI: Show UltimateQuestionOverlay
+UI --> User: Easter egg appears\n"Answer: 42?"
+deactivate App
+
+== Measurement 1: Initial Latency Check ==
+
+SDK -> Edge: Send 1 ping packet
+activate Edge
+note right SDK
+  { type: 'latency', numPackets: 1 }
+  Duration: ~1 second
+end note
+Edge --> SDK: Latency response (15ms)
+deactivate Edge
+
+SDK -> App: onResultsChange({ type: 'latency' })
+activate App
+App -> SDK: speedTest.results.getUnloadedLatency()
+SDK --> App: 15.3 (ms)
+App -> Vue: results.value.latency = 15.3
+activate Vue
+Vue -> UI: Update latency display
+UI --> User: "15.3 ms" shown
+deactivate UI
+deactivate Vue
+deactivate App
+
+== Measurement 2: Download Warmup ==
+
+SDK -> Edge: Download 8 × 100 KB chunks
+activate Edge
+note right SDK
+  { type: 'download', bytes: 1e5, count: 8 }
+  Total: 800 KB
+  Duration: ~2 seconds
+end note
+Edge --> SDK: Data chunks + timing
+deactivate Edge
+
+SDK -> App: onResultsChange({ type: 'download' })
+activate App
+App -> SDK: speedTest.results.getDownloadBandwidth()
+SDK --> App: 45000000 (45 Mbps in bps)
+App -> Vue: results.value.download = 45000000
+activate Vue
+Vue -> UI: Update drum speedometer
+note right UI
+  Convert bps to Mbps:
+  45000000 / 1e6 = 45 Mbps
+
+  Drum position:
+  (45 * 60px) - baseOffset
+end note
+UI --> User: Speedometer shows 45 Mbps\n(drum rotates up)
+deactivate UI
+deactivate Vue
+deactivate App
+
+== Measurement 3: Extended Latency Baseline ==
+
+SDK -> Edge: Send 20 ping packets
+activate Edge
+note right SDK
+  { type: 'latency', numPackets: 20 }
+  Statistical accuracy
+  Duration: ~2 seconds
+end note
+Edge --> SDK: 20 latency measurements
+deactivate Edge
+
+SDK -> App: onResultsChange({ type: 'latency' })
+activate App
+App -> SDK: speedTest.results.getUnloadedLatency()
+SDK --> App: 16.1 (ms) [averaged]
+App -> SDK: speedTest.results.getUnloadedJitter()
+SDK --> App: 2.3 (ms)
+App -> Vue: results.value.latency = 16.1\nresults.value.jitter = 2.3
+activate Vue
+Vue -> UI: Update latency & jitter displays
+UI --> User: Updated LED displays
+deactivate UI
+deactivate Vue
+deactivate App
+
+== Measurements 4-6: Progressive Downloads ==
+
+loop Download Tests (100KB, 1MB, 10MB)
+  SDK -> Edge: Download progressively larger chunks
+  activate Edge
+  note right SDK
+    Measurements:
+    - { type: 'download', bytes: 1e5, count: 6 }  (600 KB)
+    - { type: 'download', bytes: 1e6, count: 6 }  (6 MB)
+    - { type: 'download', bytes: 1e7, count: 4 }  (40 MB)
+
+    Purpose: Establish sustained throughput
+    Duration: ~15 seconds total
+  end note
+  Edge --> SDK: Data + timing + loaded latency
+  deactivate Edge
+
+  SDK -> App: onResultsChange({ type: 'download' })
+  activate App
+  App -> SDK: speedTest.results.getDownloadBandwidth()
+  SDK --> App: Increasing speeds (48, 50, 52 Mbps)
+  App -> SDK: speedTest.results.getDownLoadedLatency()
+  note right SDK: ⚠️ Note typo: DownLoaded (capital L)
+  SDK --> App: 18.7 (ms)
+  App -> SDK: speedTest.results.getDownLoadedJitter()
+  SDK --> App: 4.2 (ms)
+  App -> Vue: Update all download metrics
+  activate Vue
+  Vue -> UI: Real-time speedometer updates
+  UI --> User: Drum scrolls to higher speeds\n50 → 52 Mbps
+  deactivate UI
+  deactivate Vue
+  deactivate App
+end
+
+== Measurement 7: Upload Warmup ==
+
+SDK -> Edge: Upload 8 × 100 KB chunks
+activate Edge
+note right SDK
+  { type: 'upload', bytes: 1e5, count: 8 }
+  Total: 800 KB
+  Duration: ~5 seconds
+end note
+Edge --> SDK: Upload timing data
+deactivate Edge
+
+SDK -> App: onResultsChange({ type: 'upload' })
+activate App
+App -> SDK: speedTest.results.getUploadBandwidth()
+SDK --> App: 8000000 (8 Mbps in bps)
+App -> Vue: results.value.upload = 8000000
+activate Vue
+Vue -> UI: Update upload speedometer
+UI --> User: Upload drum shows 8 Mbps
+deactivate UI
+deactivate Vue
+deactivate App
+
+== Measurement 8: Packet Loss Test ==
+
+SDK -> Edge: Send 1000 packets (100 batches × 10)
+activate Edge
+note right SDK
+  { type: 'packetLoss', numPackets: 1e3, batchSize: 10 }
+
+  TURN server-based
+  ⚠️ May deprecate in future
+  Duration: ~10 seconds
+end note
+Edge --> SDK: Packet receipt confirmations
+deactivate Edge
+
+SDK -> App: onResultsChange({ type: 'packetLoss' })
+activate App
+App -> SDK: speedTest.results.getPacketLoss()
+SDK --> App: 0.01 (1% loss)
+App -> Vue: results.value.packetLoss = 0.01
+activate Vue
+Vue -> UI: Update packet loss display
+note right UI
+  Convert to percentage:
+  0.01 × 100 = 1.0%
+end note
+UI --> User: "1.0%" packet loss shown
+deactivate UI
+deactivate Vue
+deactivate App
+
+== Measurements 9-10: Large Uploads ==
+
+loop Upload Tests (1MB, 10MB)
+  SDK -> Edge: Upload progressively larger chunks
+  activate Edge
+  note right SDK
+    Measurements:
+    - { type: 'upload', bytes: 1e6, count: 6 }  (6 MB)
+    - { type: 'upload', bytes: 1e7, count: 4 }  (40 MB)
+
+    Duration: ~15 seconds total
+  end note
+  Edge --> SDK: Upload timing + loaded latency
+  deactivate Edge
+
+  SDK -> App: onResultsChange({ type: 'upload' })
+  activate App
+  App -> SDK: speedTest.results.getUploadBandwidth()
+  SDK --> App: Increasing speeds (9, 10 Mbps)
+  App -> SDK: speedTest.results.getUpLoadedLatency()
+  SDK --> App: 22.1 (ms)
+  App -> SDK: speedTest.results.getUpLoadedJitter()
+  SDK --> App: 3.8 (ms)
+  App -> Vue: Update all upload metrics
+  activate Vue
+  Vue -> UI: Real-time updates
+  UI --> User: Upload speeds stabilize at 10 Mbps
+  deactivate UI
+  deactivate Vue
+  deactivate App
+end
+
+== Measurement 11: Final Large Download ==
+
+SDK -> Edge: Download 4 × 25 MB chunks
+activate Edge
+note right SDK
+  { type: 'download', bytes: 2.5e7, count: 4 }
+  Total: 100 MB
+  Final sustained throughput test
+  Duration: ~10 seconds
+end note
+Edge --> SDK: Final download data + timing
+deactivate Edge
+
+SDK -> App: onResultsChange({ type: 'download' })
+activate App
+App -> SDK: speedTest.results.getDownloadBandwidth()
+SDK --> App: 53000000 (53 Mbps) [final]
+App -> Vue: results.value.download = 53000000
+activate Vue
+Vue -> UI: Final speedometer update
+UI --> User: Download speed peaks at 53 Mbps
+deactivate UI
+deactivate Vue
+deactivate App
+
+== Test Completion ==
+
+SDK -> SDK: Calculate summary statistics\nCalculate quality scores
+note right SDK
+  Summary aggregates all measurements
+
+  Scores calculated:
+  - Streaming: download + latency + packet loss
+  - Gaming: latency + jitter + packet loss
+  - RTC: up/down + latency + jitter
+end note
+
+SDK -> App: onFinish(testResults)
+activate App
+
+App -> SDK: testResults.getSummary()
+SDK --> App: Summary object
+note right App
+  {
+    download: 53000000,
+    upload: 10000000,
+    latency: 16.1,
+    jitter: 2.3,
+    downloadLatency: 18.7,
+    downloadJitter: 4.2,
+    uploadLatency: 22.1,
+    uploadJitter: 3.8,
+    packetLoss: 0.01
+  }
+end note
+
+App -> SDK: testResults.getScores()
+SDK --> App: Scores object
+note right App
+  {
+    streaming: {
+      points: 85,
+      classification: 'good'
+    },
+    gaming: {
+      points: 72,
+      classification: 'average'
+    },
+    rtc: {
+      points: 91,
+      classification: 'great'
+    }
+  }
+end note
+
+App -> Vue: summary.value = summary\nscores.value = scores
+activate Vue
+Vue -> UI: Render QualityScores component\nRender SummaryDetails component
+activate UI
+UI --> User: Show quality badges:\n✓ Streaming: Good (85)\n✓ Gaming: Average (72)\n✓ RTC: Great (91)
+deactivate UI
+deactivate Vue
+
+deactivate App
+
+SDK -> App: onRunningChange(false)
+activate App
+App -> Vue: isRunning.value = false
+activate Vue
+Vue -> UI: Re-render controls
+activate UI
+UI --> User: "Start Test" button enabled\nStatus: "Test completed"
+deactivate UI
+deactivate Vue
+deactivate App
+
+deactivate SDK
+
+== User Interaction (Optional) ==
+
+User -> UI: Answer "42" in overlay
+activate UI
+UI -> App: emit('correct-answer')
+deactivate UI
+activate App
+App -> Vue: showOverlay.value = false
+activate Vue
+Vue -> UI: Hide overlay, restore opacity
+UI --> User: Test results fully visible
+deactivate UI
+deactivate Vue
+deactivate App
+
+note over User, Edge
+  Total test duration: ~30-60 seconds
+  Total bandwidth consumed: ~200 MB
+  Network requests: ~50-100 to Cloudflare edge
+
+  Key API patterns demonstrated:
+  ✓ markRaw() wrapper for Vue compatibility
+  ✓ Event-driven architecture (3 callbacks)
+  ✓ Real-time progressive updates
+  ✓ Null checking before using results
+  ✓ Unit conversion (bps → Mbps, decimal → %)
+end note
+
+@enduml

@@ -107,11 +107,21 @@ export default {
   computed: {
     downloadSpeed() {
       if (this.results.download === null || this.results.download === undefined) return 0
-      return this.results.download / 1e6
+      const speed = this.results.download / 1e6
+      console.log('RetroSpeedTest downloadSpeed computed:', {
+        raw_bps: this.results.download,
+        divided_by_1e6: speed
+      })
+      return speed
     },
     uploadSpeed() {
       if (this.results.upload === null || this.results.upload === undefined) return 0
-      return this.results.upload / 1e6
+      const speed = this.results.upload / 1e6
+      console.log('RetroSpeedTest uploadSpeed computed:', {
+        raw_bps: this.results.upload,
+        divided_by_1e6: speed
+      })
+      return speed
     }
   },
   methods: {
