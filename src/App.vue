@@ -13,6 +13,7 @@
       :results="results"
       :is-running="isRunning"
       :summary="summary"
+      :test-duration="testDuration"
       :style="{ opacity: showOverlay ? 0.3 : 1 }"
     />
     <QualityScores v-if="scores" :scores="scores" />
@@ -27,7 +28,7 @@
 </template>
 
 <script>
-import { ref, computed, markRaw } from 'vue'
+import { ref, computed, markRaw, watch, onUnmounted } from 'vue'
 import SpeedTest from '@cloudflare/speedtest'
 import AppHeader from './components/AppHeader.vue'
 import AppFooter from './components/AppFooter.vue'
@@ -52,6 +53,9 @@ export default {
     const speedTest = ref(null)
     const isRunning = ref(false)
     const showOverlay = ref(false)
+    const testDuration = ref(0)
+    const timerInterval = ref(null)
+    const testStartTime = ref(null)
     const results = ref({
       download: null,
       upload: null,
@@ -76,6 +80,31 @@ export default {
       if (isRunning.value) return 'status-running'
       if (summary.value) return 'status-complete'
       return 'status-idle'
+    })
+
+    // Watch isRunning to start/stop timer
+    watch(isRunning, (running) => {
+      if (running) {
+        // Start timer
+        testStartTime.value = Date.now()
+        testDuration.value = 0
+        timerInterval.value = setInterval(() => {
+          testDuration.value = Math.floor((Date.now() - testStartTime.value) / 1000)
+        }, 100) // Update every 100ms for smooth updates
+      } else {
+        // Stop timer
+        if (timerInterval.value) {
+          clearInterval(timerInterval.value)
+          timerInterval.value = null
+        }
+      }
+    })
+
+    // Cleanup on unmount
+    onUnmounted(() => {
+      if (timerInterval.value) {
+        clearInterval(timerInterval.value)
+      }
     })
 
     const startTest = () => {
@@ -104,18 +133,25 @@ export default {
         console.log('Creating SpeedTest instance...')
         speedTest.value = markRaw(new SpeedTest({
         autoStart: false,
+        bandwidthFinishRequestDuration: 1000,
+        measureDownloadLoadedLatency: false,
+        measureUploadLoadedLatency: false,
         measurements: [
           { type: 'latency', numPackets: 1 },
-          { type: 'download', bytes: 1e5, count: 8, bypassMinDuration: true },
+          { type: 'download', bytes: 1e5, count: 1, bypassMinDuration: true },
           { type: 'latency', numPackets: 20 },
-          { type: 'download', bytes: 1e5, count: 6 },
-          { type: 'download', bytes: 1e6, count: 6 },
-          { type: 'download', bytes: 1e7, count: 4 },
+          { type: 'download', bytes: 1e5, count: 9 },
+          { type: 'download', bytes: 1e6, count: 8 },
           { type: 'upload', bytes: 1e5, count: 8 },
-          { type: 'packetLoss', numPackets: 1e3, batchSize: 10 },
+          { type: 'packetLoss', numPackets: 1e3, responsesWaitTime: 3000 },
           { type: 'upload', bytes: 1e6, count: 6 },
+          { type: 'download', bytes: 1e7, count: 6 },
           { type: 'upload', bytes: 1e7, count: 4 },
-          { type: 'download', bytes: 2.5e7, count: 4 }
+          { type: 'download', bytes: 2.5e7, count: 4 },
+          { type: 'upload', bytes: 2.5e7, count: 4 },
+          { type: 'download', bytes: 1e8, count: 3 },
+          { type: 'upload', bytes: 5e7, count: 3 },
+          { type: 'download', bytes: 2.5e8, count: 2 }
         ]
       }))
 
@@ -135,6 +171,7 @@ export default {
       }
 
       speedTest.value.onResultsChange = ({ type }) => {
+        console.log('📊 onResultsChange called with type:', type)
         if (!speedTest.value.results) return
 
         // Update results in real-time using the Results object methods
@@ -151,8 +188,23 @@ export default {
         const uploadJitter = res.getUpLoadedJitter()
         const packetLoss = res.getPacketLoss()
 
-        if (download !== null && download !== undefined) results.value.download = download
-        if (upload !== null && upload !== undefined) results.value.upload = upload
+        // Debug logging
+        if (type === 'upload') {
+          console.log('🔴 Upload update - raw bps:', upload, 'Mbps:', upload ? upload / 1e6 : null, 'Type:', type)
+          console.log('   Current results.value.upload:', results.value.upload, 'After update will be:', upload)
+        }
+        if (type === 'download') {
+          console.log('🔵 Download update - raw bps:', download, 'Mbps:', download ? download / 1e6 : null, 'Type:', type)
+        }
+
+        if (download !== null && download !== undefined) {
+          console.log('✅ Setting download to:', download)
+          results.value.download = download
+        }
+        if (upload !== null && upload !== undefined) {
+          console.log('✅ Setting upload to:', upload)
+          results.value.upload = upload
+        }
         if (latency !== null && latency !== undefined) results.value.latency = latency
         if (jitter !== null && jitter !== undefined) results.value.jitter = jitter
         if (downloadLatency !== null && downloadLatency !== undefined) results.value.downloadLatency = downloadLatency
@@ -214,6 +266,7 @@ export default {
     return {
       isRunning,
       showOverlay,
+      testDuration,
       results,
       scores,
       summary,

@@ -3,6 +3,10 @@
     <VintagePattern />
     <div class="retro-header">
       <div class="model-badge">CX SPEEDTEST</div>
+      <div class="test-timer">
+        <div class="timer-label">Test Duration</div>
+        <div class="timer-display">{{ formatDuration(testDuration) }}</div>
+      </div>
       <div class="year-badge">1975-1989</div>
     </div>
 
@@ -97,6 +101,10 @@ export default {
     summary: {
       type: Object,
       default: null
+    },
+    testDuration: {
+      type: Number,
+      default: 0
     }
   },
   data() {
@@ -104,14 +112,24 @@ export default {
       hasError: false
     }
   },
+  watch: {
+    'results.download'(newVal, oldVal) {
+      console.log('[RetroSpeedTest] results.download changed:', oldVal, '→', newVal)
+    },
+    'results.upload'(newVal, oldVal) {
+      console.log('[RetroSpeedTest] results.upload changed:', oldVal, '→', newVal)
+    }
+  },
   computed: {
     downloadSpeed() {
-      if (this.results.download === null || this.results.download === undefined) return 0
-      return this.results.download / 1e6
+      const value = this.results.download === null || this.results.download === undefined ? 0 : this.results.download / 1e6
+      console.log('[RetroSpeedTest] downloadSpeed computed - raw:', this.results.download, 'Mbps:', value)
+      return value
     },
     uploadSpeed() {
-      if (this.results.upload === null || this.results.upload === undefined) return 0
-      return this.results.upload / 1e6
+      const value = this.results.upload === null || this.results.upload === undefined ? 0 : this.results.upload / 1e6
+      console.log('[RetroSpeedTest] uploadSpeed computed - raw:', this.results.upload, 'Mbps:', value)
+      return value
     }
   },
   methods: {
@@ -122,6 +140,11 @@ export default {
     formatPacketLoss(percent) {
       if (percent === null || percent === undefined) return '--.-'
       return (percent * 100).toFixed(1)
+    },
+    formatDuration(seconds) {
+      const mins = Math.floor(seconds / 60)
+      const secs = seconds % 60
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
     }
   }
 }
@@ -169,6 +192,37 @@ export default {
   text-shadow:
     0 0 10px rgba(255, 102, 0, 0.8),
     2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.test-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.timer-label {
+  font-family: 'Courier New', monospace;
+  font-size: 0.6rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.timer-display {
+  font-family: 'Courier New', 'DS-Digital', monospace;
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #00ff00;
+  text-shadow:
+    0 0 5px #00ff00,
+    0 0 10px #00ff00;
+  background: #000;
+  padding: 5px 15px;
+  border: 2px solid #333;
+  border-radius: 4px;
+  min-width: 80px;
+  text-align: center;
 }
 
 .year-badge {
@@ -381,6 +435,11 @@ export default {
     padding: 20px;
   }
 
+  .retro-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+
   .main-drums {
     flex-direction: column;
     gap: 20px;
@@ -396,6 +455,12 @@ export default {
 
   .model-badge {
     font-size: 1.2rem;
+  }
+
+  .timer-display {
+    font-size: 1.2rem;
+    padding: 4px 12px;
+    min-width: 70px;
   }
 }
 </style>

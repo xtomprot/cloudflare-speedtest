@@ -41,9 +41,16 @@ export default {
       default: false
     }
   },
+  watch: {
+    value(newVal, oldVal) {
+      console.log(`[${this.label}] 🎯 Prop changed:`, oldVal, '→', newVal)
+    }
+  },
   computed: {
     displayValue() {
-      return Math.round(this.value)
+      const rounded = Math.round(this.value)
+      console.log(`[${this.label}] DrumSpeedometer - value:`, this.value, 'displayValue:', rounded)
+      return rounded
     },
     drumDigits() {
       // Create a continuous drum of digits from 0-999
@@ -60,8 +67,18 @@ export default {
       // Each digit is 60px high, position so current value is centered
       const digitHeight = 60
       const baseOffset = 10 * digitHeight // Start offset (10 digits above 0)
-      const valueOffset = this.displayValue * digitHeight
-      return baseOffset - valueOffset
+
+      // Center the window on the current value
+      const windowHeight = 80
+      const centerOffset = windowHeight / 2 - digitHeight / 2
+
+      // Calculate position: we need to align digit at index (displayValue + 10) to the center
+      const digitIndex = this.displayValue + 10 // Account for -10 to -1 prefix
+      const digitPosition = digitIndex * digitHeight
+      const position = centerOffset - digitPosition
+
+      console.log(`[${this.label}] drumPosition calc: displayValue=${this.displayValue}, digitIndex=${digitIndex}, position=${position}px (was: ${baseOffset - this.displayValue * digitHeight}px)`)
+      return position
     }
   }
 }
