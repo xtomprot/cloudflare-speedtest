@@ -134,6 +134,7 @@ export default {
         speedTest.value = markRaw(new SpeedTest({
         autoStart: false,
         bandwidthFinishRequestDuration: 1000,
+        bandwidthPercentile: 0.95,
         measureDownloadLoadedLatency: false,
         measureUploadLoadedLatency: false,
         measurements: [
